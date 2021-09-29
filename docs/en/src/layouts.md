@@ -81,6 +81,8 @@ A layout can be one of the following:
 - ["Selection"][11]
 - ["HelpMenu"][12]
 - ["SortAndFilter"][13]
+- { [StaticContent][25] = { config = [Panel UI Config][27], content = string } }
+- { [DynamicContent][26] = { config = [Panel UI Config][27], content = string } }
 - { [Horizontal][14] = { config = [Layout Config][15], splits = { [Layout][3], ... } }
 - { [Vertical][16] = { config = [Layout Config][15], splits = { [Layout][3], ... } }
 
@@ -110,6 +112,24 @@ real-time.
 
 This layout contains the panel displaying the pipeline of sorters and filters
 applied of the list of paths being displayed.
+
+### StaticContent
+
+This layout renders a static content.
+
+It contains the following information:
+
+- [config][27]
+- [content][28]
+
+### DynamicContent
+
+This layout renders a dynamic content.
+
+It contains the following information:
+
+- [config][27]
+- [content][29]
 
 ### Horizontal
 
@@ -199,8 +219,23 @@ Type: list of [Layout][3]
 The list of child layouts to fit into the parent layout.
 
 
-Example
--------
+Static Content
+--------------
+
+Type: string
+
+The content to render.
+
+Dynamic Content
+--------------
+
+Type: string
+
+The path to a [Lua Function][30] which returns a string instead of messages.
+
+
+Example: Defining Custom Layout
+-------------------------------
 
 [![layout.png][23]][24]
 
@@ -218,7 +253,7 @@ xplr.config.layouts.builtin.default = {
     },
     splits = {
       "Table",
-      "HelpMenu",
+      { StaticContent = { content = "foo" } },
     }
   }
 }
@@ -249,3 +284,9 @@ xplr.config.layouts.builtin.default = {
 [22]:#constraint
 [23]:https://s6.gifyu.com/images/layout.png
 [24]:https://gifyu.com/image/1X38
+[25]:#staticcontent
+[26]:#dynamiccontent
+[27]:https://docs.rs/xplr/latest/xplr/config/struct.PanelUiConfig.html
+[28]:#static-content
+[29]:#dynamic-content
+[30]:message.md#lua-function-calls

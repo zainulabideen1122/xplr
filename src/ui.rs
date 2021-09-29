@@ -35,7 +35,7 @@ fn read_only_indicator(app: &app::App) -> &str {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct LayoutOptions {
     #[serde(default)]
@@ -81,7 +81,7 @@ impl LayoutOptions {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub enum Layout {
     Nothing,
@@ -90,6 +90,14 @@ pub enum Layout {
     Selection,
     HelpMenu,
     SortAndFilter,
+    StaticContent {
+        config: Option<PanelUiConfig>,
+        content: String,
+    },
+    DynamicContent {
+        config: Option<PanelUiConfig>,
+        content: String,
+    },
     Horizontal {
         config: LayoutOptions,
         splits: Vec<Layout>,
@@ -248,7 +256,7 @@ impl Into<TuiStyle> for Style {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub enum Constraint {
     Percentage(u16),
@@ -937,6 +945,50 @@ pub fn draw_nothing<B: Backend>(
     f.render_widget(nothing, layout_size);
 }
 
+pub fn draw_static_content<B: Backend>(
+    f: &mut Frame<B>,
+    _screen_size: Rect,
+    layout_size: Rect,
+    app: &app::App,
+    config: Option<PanelUiConfig>,
+    content: String,
+    _lua: &Lua,
+) {
+    let panel_config = app.config().general().panel_ui();
+    let config = config.unwrap_or(panel_config.default().to_owned());
+    let lines: Vec<ListItem> = content.lines().into_iter().map(ListItem::new).collect();
+    let content = List::new(lines).block(block(config, "".into()));
+    f.render_widget(content, layout_size);
+}
+
+pub fn draw_dynamic_content<B: Backend>(
+    f: &mut Frame<B>,
+    _screen_size: Rect,
+    layout_size: Rect,
+    app: &app::App,
+    config: Option<PanelUiConfig>,
+    func: String,
+    lua: &Lua,
+) {
+    let panel_config = app.config().general().panel_ui();
+    let config = config.unwrap_or(panel_config.default().to_owned());
+
+    let lines: Vec<ListItem> = lua
+        .to_value(&app.to_lua_arg())
+        .map(|arg| lua::call(lua, &func, arg).unwrap_or_else(|e| format!("{:?}", e)))
+        .unwrap_or_else(|e| e.to_string())
+        .lines()
+        .into_iter()
+        .map(|l| {
+            let line = ansi_to_text(l.bytes()).unwrap_or_else(|e| Text::raw(e.to_string()));
+            ListItem::new(line)
+        })
+        .collect();
+
+    let content = List::new(lines).block(block(config, "".into()));
+    f.render_widget(content, layout_size);
+}
+
 pub fn draw_layout<B: Backend>(
     layout: Layout,
     f: &mut Frame<B>,
@@ -957,6 +1009,12 @@ pub fn draw_layout<B: Backend>(
             } else {
                 draw_logs(f, screen_size, layout_size, app, lua);
             };
+        }
+        Layout::StaticContent { config, content } => {
+            draw_static_content(f, screen_size, layout_size, app, config, content, lua)
+        }
+        Layout::DynamicContent { config, content } => {
+            draw_dynamic_content(f, screen_size, layout_size, app, config, content, lua)
         }
         Layout::Horizontal { config, splits } => {
             let chunks = TuiLayout::default()
@@ -1026,7 +1084,12 @@ pub fn draw_layout<B: Backend>(
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &app::App, lua: &Lua) {
     let screen_size = f.size();
-    let layout = app.layout().to_owned();
+    let layout = app
+        .mode()
+        .layout()
+        .as_ref()
+        .unwrap_or(app.layout())
+        .to_owned();
 
     draw_layout(layout, f, screen_size, screen_size, app, lua);
 }
